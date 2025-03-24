@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Редактор манги - Manga Translator</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <!-- Header Section -->
+    <header class="header">
+        <div class="container header-content">
+            <h1><a href="/" class="header-link">Manga Translator</a></h1>
+            <p>Редактирование перевода манги</p>
+            <div class="theme-switch-wrapper">
+                <label class="theme-switch" for="theme-switch">
+                    <input type="checkbox" id="theme-switch" />
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="container mt-4">
+        <!-- GPU/CPU Status Badge -->
+        <div class="gpu-status-badge">
+            <i class="fas {% if use_gpu %}fa-microchip text-success{% else %}fa-desktop text-primary{% endif %}"></i>
+            <span>Режим: {% if use_gpu %}GPU{% else %}CPU{% endif %}</span>
+        </div>
+
+        <!-- Editor Interface -->
+        <div class="editor-container">
+            <div class="editor-header">
+                <h2>Редактирование: {{ session_data.original_filename }}</h2>
+                <div class="editor-actions">
+                    <!-- Новый селектор файлов с сохранением порядка -->
+                    {% if has_related %}
+                    <div class="panel-controls">
+                        <select id="file-selector" class="form-select">
+                            {% for file in all_files %}
+                            <option value="{{ file.session_id }}" {% if file.session_id == session_id %}selected{% endif %}>
+                                {{ file.original_filename }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <button id="prev-file" class="btn btn-sm btn-outline" title="Предыдущий файл">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <button id="next-file" class="btn btn-sm btn-outline" title="Следующий файл">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                    {% endif %}
+                    
+                    <button id="preview-button" class="btn btn-primary">
+                        <i class="fas fa-eye"></i> Предпросмотр
+                    </button>
+                    <button id="save-button" class="btn btn-success">
+                        <i class="fas fa-save"></i> Сохранить
+                    </button>
+                    <a href="/" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Назад
+                    </a>
+                </div>
+            </div>
+
+            <div class="editor-content">
+                <!-- Left Panel: Image Preview -->
+                <div class="editor-panel editor-image-panel">
+                    <div class="panel-header">
+                        <h3>Изображение</h3>
+                        <div class="panel-controls">
+                            <button id="toggle-image-mode" class="btn btn-sm btn-outline">
+                                <i class="fas fa-exchange-alt"></i> Режимы просмотра
+                            </button>
+                            <button id="zoom-in" class="btn btn-sm btn-outline">
+                                <i class="fas fa-search-plus"></i>
+                            </button>
+                            <button id="zoom-out" class="btn btn-sm btn-outline">
+                                <i class="fas fa-search-minus"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div class="image-container" id="image-container">
+                            <!-- Изменение: теперь показываем переведенное изображение первым -->
+                            <img id="translated-image" src="/static/editor_images/{{ session_id }}/translated_{{ session_data.original_filename }}" alt="Переведенное изображение">
+                            <img id="text-removed-image" src="/static/editor_images/{{ session_id }}/text_removed_{{ session_data.original_filename }}" alt="Изображение без текста" style="display: none;">
+                            <img id="original-image" src="/static/editor_images/{{ session_id }}/original_{{ session_data.original_filename }}" alt="Оригинальное изображение" style="display: none;">
+                            <img id="preview-image" src="" alt="Предпросмотр" style="display: none;">
+                            
+                            <!-- Текстовые блоки -->
+                            {% for block in session_data.text_blocks %}
+                            <div class="text-block" 
+                                 data-id="{{ block.id }}" 
+                                 style="left: {{ block.box[0] }}px; top: {{ block.box[1] }}px; width: {{ block.box[2] - block.box[0] }}px; height: {{ block.box[3] - block.box[1] }}px;"
+                                 onclick="selectTextBlock({{ block.id }})">
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Panel: Text Editor -->
+                <div class="editor-panel editor-text-panel">
+                    <div class="panel-header">
+                        <h3>Текст</h3>
+                        <div class="panel-controls">
+                            <select id="text-block-selector" class="form-select">
+                                <option value="">Выберите блок текста</option>
+                                {% for block in session_data.text_blocks %}
+                                <option value="{{ block.id }}">Блок #{{ block.id + 1 }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div id="no-block-selected" class="empty-state">
+                            <i class="fas fa-mouse-pointer"></i>
+                            <p>Выберите блок текста на изображении или из выпадающего списка</p>
+                        </div>
+                        
+                        <div id="text-editor" class="text-editor" style="display: none;">
+                            <div class="form-group">
+                                <label for="original-text" class="form-label">Оригинальный текст:</label>
+                                <div id="original-text" class="text-display"></div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="translated-text" class="form-label">Переведенный текст:</label>
+                                <textarea id="translated-text" class="form-control" rows="5"></textarea>
+                            </div>
+                            <div id="text-formatting-tools" class="formatting-tools">
+                                <div class="formatting-header">
+                                    <h4>Форматирование текста</h4>
+                                </div>
+                                
+                                <div class="formatting-row">
+                                    <div class="tool-group">
+                                        <button id="format-bold" class="btn btn-sm btn-outline" title="Жирный">
+                                            <i class="fas fa-bold"></i>
+                                        </button>
+                                        <button id="format-italic" class="btn btn-sm btn-outline" title="Курсив">
+                                            <i class="fas fa-italic"></i>
+                                        </button>
+                                    </div>
+                                    
+                                    <div class="tool-group">
+                                        <button id="font-decrease" class="btn btn-sm btn-outline" title="Уменьшить размер">
+                                            <i class="fas fa-minus"></i>
+                                        </button>
+                                        <span id="font-size-value" class="font-size-display">16</span>
+                                        <button id="font-increase" class="btn btn-sm btn-outline" title="Увеличить размер">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="formatting-row">
+                                    <div class="tool-group align-group">
+                                        <button id="align-left" class="btn btn-sm btn-outline" title="По левому краю">
+                                            <i class="fas fa-align-left"></i>
+                                        </button>
+                                        <button id="align-center" class="btn btn-sm btn-outline active" title="По центру">
+                                            <i class="fas fa-align-center"></i>
+                                        </button>
+                                        <button id="align-right" class="btn btn-sm btn-outline" title="По правому краю">
+                                            <i class="fas fa-align-right"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="formatting-row">
+                                    <div class="tool-group position-group">
+                                        <div class="position-controls">
+                                            <button id="move-up" class="btn btn-sm btn-outline position-btn" title="Сдвинуть вверх">
+                                                <i class="fas fa-arrow-up"></i>
+                                            </button>
+                                        </div>
+                                        <div class="position-controls">
+                                            <button id="move-left" class="btn btn-sm btn-outline position-btn" title="Сдвинуть влево">
+                                                <i class="fas fa-arrow-left"></i>
+                                            </button>
+                                            <button id="reset-position" class="btn btn-sm btn-outline position-btn" title="Сбросить положение">
+                                                <i class="fas fa-compress-arrows-alt"></i>
+                                            </button>
+                                            <button id="move-right" class="btn btn-sm btn-outline position-btn" title="Сдвинуть вправо">
+                                                <i class="fas fa-arrow-right"></i>
+                                            </button>
+                                        </div>
+                                        <div class="position-controls">
+                                            <button id="move-down" class="btn btn-sm btn-outline position-btn" title="Сдвинуть вниз">
+                                                <i class="fas fa-arrow-down"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="editor-block-actions">
+                                <button id="update-block" class="btn btn-primary">
+                                    <i class="fas fa-check"></i> Обновить блок
+                                </button>
+                                <button id="next-block" class="btn btn-secondary">
+                                    Следующий блок <i class="fas fa-arrow-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save Dialog -->
+    <div id="save-dialog" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Сохранить отредактированное изображение</h3>
+                <button class="close-button" onclick="closeSaveDialog()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="save-filename" class="form-label">Имя файла:</label>
+                    <input type="text" id="save-filename" class="form-control" value="edited_{{ session_data.original_filename }}">
+                </div>
+                
+                <div id="save-preview" class="save-preview">
+                    <img id="save-preview-image" src="" alt="Предпросмотр сохранения">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="confirm-save" class="btn btn-success">
+                    <i class="fas fa-download"></i> Сохранить
+                </button>
+                <button class="btn btn-secondary" onclick="closeSaveDialog()">
+                    Отмена
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="spinner" class="spinner-container" style="display: none;">
+        <div class="spinner"></div>
+        <div class="spinner-text">Обработка...</div>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        window.sessionId = "{{ session_id }}";
+        window.textBlocks = JSON.parse('{{ session_data.text_blocks|tojson }}');
+    </script>
+    <script type="module" src="{{ url_for('static', filename='js/editor-app.js') }}"></script>
+    <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'91fdfd0eca14dd20',t:'MTc0MTg5NDY3My4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
+</body>
+</html>

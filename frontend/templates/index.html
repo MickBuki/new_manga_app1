@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manga Translator</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <!-- Header Section -->
+    <header class="header">
+        <div class="container header-content">
+            <h1>Manga Translator</h1>
+            <p>Автоматическое распознавание и перевод текста в манге с использованием AI</p>
+            <div class="theme-switch-wrapper">
+                <label class="theme-switch" for="theme-switch">
+                    <input type="checkbox" id="theme-switch" />
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="container mt-4">
+        <!-- GPU/CPU Status Badge -->
+        <div class="gpu-status-badge">
+            <i class="fas {% if use_gpu %}fa-microchip text-success{% else %}fa-desktop text-primary{% endif %}"></i>
+            <span>Режим: {% if use_gpu %}GPU{% else %}CPU{% endif %}</span>
+            <span class="badge-info">Запустите с параметром --gpu для использования GPU</span>
+        </div>
+        <!-- Alerts -->
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i>
+            <div>Обработка изображений может занять несколько минут. Пожалуйста, дождитесь завершения после загрузки.</div>
+        </div>
+
+        {% if error %}
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle"></i>
+            <div>{{ error }}</div>
+        </div>
+        {% endif %}
+
+        <!-- Settings Card -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2 class="card-title">Настройки перевода</h2>
+            </div>
+            <div class="card-body">
+                <!-- Translation Method -->
+                <div class="form-group">
+                    <div class="form-label">Метод перевода:</div>
+                    <div class="radio-group">
+                        <div class="radio-option">
+                            <input type="radio" id="google-translate" name="translation_method" value="google" checked>
+                            <label for="google-translate" class="radio-label">
+                                <i class="fab fa-google"></i> Google Translate
+                            </label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="openai-translate" name="translation_method" value="openai">
+                            <label for="openai-translate" class="radio-label">
+                                <i class="fas fa-robot"></i> OpenAI gpt-4o-mini
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <div class="form-label">Язык оригинала:</div>
+                    <select id="source_language" name="source_language" class="form-select">
+                        <option value="ja">Японский</option>
+                        <option value="zh" selected>Китайский</option>
+                        <option value="ko">Корейский</option>
+                        <option value="en">Английский</option>
+                        <option value="fr">Французский</option>
+                        <option value="es">Испанский</option>
+                        <option value="de">Немецкий</option>
+                    </select>
+                    <div class="mt-1" style="color: var(--gray); font-size: 0.9rem;">
+                        <span id="ocr-lang-warning" style="display: none; color: var(--warning);">
+                            <i class="fas fa-exclamation-triangle"></i> MangaOCR оптимизирован только для японского языка
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- Выбор языка перевода -->
+                <div class="form-group">
+                    <div class="form-label">Язык перевода:</div>
+                    <select id="target_language" name="target_language" class="form-select">
+                        <option value="ru" selected>Русский</option>
+                        <option value="en">Английский</option>
+                        <option value="fr">Французский</option>
+                        <option value="es">Испанский</option>
+                        <option value="de">Немецкий</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <div class="form-label">OCR движок:</div>
+                    <div class="ocr-info-section">
+                        <div class="ocr-info-text">
+                            <i class="fas fa-magic"></i> OCR движок выбирается автоматически для каждого языка
+                        </div>
+                        <div class="ocr-engine-info">
+                            <span id="current-ocr-info">
+                                <i class="fas fa-info-circle"></i> Для <span id="language-name">китайского</span> используется <span id="engine-name">PaddleOCR</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Edit Mode Option - NEW SECTION -->
+                <div class="form-group">
+                    <div class="form-label">Режим обработки:</div>
+                    <div class="radio-group">
+                        <div class="radio-option">
+                            <input type="radio" id="auto-mode" name="edit_mode" value="false" checked>
+                            <label for="auto-mode" class="radio-label">
+                                <i class="fas fa-magic"></i> Автоматический перевод
+                            </label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="edit-mode" name="edit_mode" value="true">
+                            <label for="edit-mode" class="radio-label">
+                                <i class="fas fa-edit"></i> Режим редактирования
+                            </label>
+                        </div>
+                    </div>
+                    <div class="mode-description">
+                        <div id="auto-mode-description">
+                            Автоматически обрабатывает и переводит изображения без вмешательства пользователя.
+                        </div>
+                        <div id="edit-mode-description" style="display: none;">
+                            Позволяет редактировать перевод перед генерацией финального изображения.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- API Key Input -->
+                <div class="form-group" id="api-key-group" style="display: none;">
+                    <div class="form-label">API ключ OpenAI:</div>
+                    <div class="input-group">
+                        <input type="password" id="openai_api_key" class="form-control" placeholder="Введите ваш API ключ OpenAI">
+                        <div class="input-group-append">
+                            <button class="btn btn-secondary" type="button" id="toggle-api-key">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mt-1" style="color: var(--gray); font-size: 0.9rem;">
+                        Ключ требуется только для перевода через OpenAI gpt-4o-mini
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs Container -->
+        <div class="tabs-container">
+            <div class="tabs-nav">
+                <button class="tab-button active" data-tab="tab-individual">
+                    <i class="fas fa-file-image"></i> Отдельные изображения
+                </button>
+                <button class="tab-button" data-tab="tab-manga-folders">
+                    <i class="fas fa-folder-open"></i> Папки манги
+                </button>
+            </div>
+
+            <!-- Individual Files Tab -->
+            <div id="tab-individual" class="tab-content active">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Загрузка отдельных изображений</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="post" enctype="multipart/form-data" id="individual-form" onsubmit="return showSpinner()">
+                            <input type="hidden" name="form_type" value="individual_files">
+                            <input type="hidden" name="translation_method" value="google" id="translation_method_individual">
+                            <input type="hidden" name="openai_api_key" value="" id="openai_api_key_individual">
+                            <input type="hidden" name="ocr_engine" value="" id="ocr_engine_individual">
+                            <input type="hidden" name="edit_mode" value="false" id="edit_mode_individual">
+                            <input type="hidden" name="source_language" value="zh" id="source_language_individual">
+                            <input type="hidden" name="target_language" value="ru" id="target_language_individual">
+                            <div class="d-flex flex-wrap gap-2 align-center mb-3">
+                                <div class="btn btn-primary btn-upload">
+                                    <i class="fas fa-upload"></i> Выбрать файлы
+                                    <input type="file" name="files" accept="image/*" multiple id="file-input">
+                                </div>
+                                <div id="file-count" style="color: var(--gray);">Файлы не выбраны</div>
+                            </div>
+                            
+                            <div id="selected-files-preview" class="mb-3" style="display: none;">
+                                <div class="form-label">Выбранные файлы:</div>
+                                <div class="folder-images-grid" id="files-preview-grid"></div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-cog"></i> Обработать изображения
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Manga Folders Tab -->
+            <div id="tab-manga-folders" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Папки с мангой</h3>
+                    </div>
+                    <div class="card-body">
+                        {% if manga_folders %}
+                        <form method="post" enctype="multipart/form-data" id="folders-form" onsubmit="return showSpinner()">
+                            <input type="hidden" name="form_type" value="manga_folders">
+                            <input type="hidden" name="translation_method" value="google" id="translation_method_folders">
+                            <input type="hidden" name="openai_api_key" value="" id="openai_api_key_folders">
+                            <input type="hidden" name="ocr_engine" value="" id="ocr_engine_folders">
+                            <input type="hidden" name="edit_mode" value="false" id="edit_mode_folders">
+                            <input type="hidden" name="source_language" value="zh" id="source_language_folders">
+                            <input type="hidden" name="target_language" value="ru" id="target_language_folders">
+                            <div class="folders-list">
+                                {% for folder in manga_folders %}
+                                <div class="folder-item">
+                                    <div class="folder-header" onclick="toggleFolder('{{ folder.id }}')">
+                                        <div class="folder-name">
+                                            <i class="fas fa-folder"></i>
+                                            <span>{{ folder.name }}</span>
+                                        </div>
+                                        <div class="folder-count">
+                                            <span class="badge">{{ folder.images|length }} изображений</span>
+                                            <i class="fas fa-chevron-down folder-icon-{{ folder.id }}"></i>
+                                        </div>
+                                    </div>
+                                    <div id="folder-content-{{ folder.id }}" class="folder-content">
+                                        <div class="folder-toolbar">
+                                            <div class="checkbox-option">
+                                                <input type="checkbox" id="select-all-{{ folder.id }}" onchange="selectAllImages('{{ folder.id }}')">
+                                                <label for="select-all-{{ folder.id }}" class="checkbox-label">
+                                                    <i class="fas fa-check-square"></i> Выбрать все
+                                                </label>
+                                            </div>
+                                            <div>
+                                                <span id="selected-count-{{ folder.id }}">0</span> из {{ folder.images|length }} выбрано
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="folder-images-grid">
+                                            {% for image in folder.images %}
+                                            <div class="image-item">
+                                                <div class="image-preview">
+                                                    <img src="{{ image.thumbnail_url }}" alt="{{ image.name }}">
+                                                    <input type="checkbox" class="image-checkbox folder-{{ folder.id }}-checkbox" 
+                                                           id="image-{{ folder.id }}-{{ loop.index }}"
+                                                           name="selected_images" 
+                                                           value="{{ image.path }}"
+                                                           onchange="updateSelectedCount('{{ folder.id }}')">
+                                                </div>
+                                                <div class="image-name" title="{{ image.name }}">{{ image.name }}</div>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                        
+                                        <div class="folder-actions">
+                                            <button type="submit" name="folder_path" value="{{ folder.path }}" class="btn btn-primary">
+                                                <i class="fas fa-language"></i> Перевести выбранные
+                                            </button>
+                                            <button type="submit" name="translate_all_folder" value="{{ folder.path }}" class="btn btn-secondary">
+                                                <i class="fas fa-folder-open"></i> Перевести всю папку
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </form>
+                        {% else %}
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <div>Папка books не существует или пуста. Создайте папку books и добавьте в неё папки с вашей мангой.</div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        {% if results %}
+        <div class="results-container">
+            <div class="results-header">
+                <h2>Результаты перевода</h2>
+                <div class="pagination">
+                    <button id="reader-mode-toggle" class="btn btn-secondary manga-fullscreen-toggle" title="Режим чтения">
+                        <i class="fas fa-expand-alt"></i>
+                    </button>
+                    <button id="prev-page" class="btn btn-secondary" onclick="navigateReader('prev')" disabled>
+                        <i class="fas fa-chevron-left"></i> Назад
+                    </button>
+                    <div class="page-info">
+                        Страница <span id="current-page">1</span> из <span id="total-pages">{{ results|length }}</span>
+                    </div>
+                    <button id="next-page" class="btn btn-secondary" onclick="navigateReader('next')">
+                        Вперед <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+                <div class="download-options-panel">
+                    <div class="download-options-title">Скачать как:</div>
+                    <div class="download-buttons">
+                        <button id="download-pdf" class="btn btn-primary download-btn">
+                            <i class="fas fa-file-pdf"></i> PDF
+                        </button>
+                        <button id="download-cbz" class="btn btn-primary download-btn">
+                            <i class="fas fa-book"></i> CBZ
+                        </button>
+                        <button id="download-zip" class="btn btn-primary download-btn">
+                            <i class="fas fa-file-archive"></i> ZIP
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {% for file_result in results %}
+            <div class="card manga-card" style="display: none;" data-image-path="{{ file_result.image_path|default('') }}">
+                <div class="manga-card-header">
+                    <h3 class="manga-card-title">{{ file_result.filename }}</h3>
+                    
+                    {% if file_result.edit_session_id %}
+                    <div class="editor-link">
+                        <a href="/edit/{{ file_result.edit_session_id }}" class="btn btn-primary">
+                            <i class="fas fa-edit"></i> Редактировать перевод
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="manga-card-body">
+                    <img src="data:image/png;base64,{{ file_result.translated }}" alt="Переведенное изображение" class="manga-image">
+                    
+                    <!-- Details Button -->
+                    <button class="details-button" onclick="toggleDetails('{{ loop.index }}')">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    
+                    <!-- Details Dropdown -->
+                    <div id="details-dropdown-{{ loop.index }}" class="details-dropdown">
+                        <div class="details-item" onclick="showDialog('original-dialog-{{ loop.index }}')">
+                            <i class="fas fa-image"></i> Исходное изображение
+                        </div>
+                        <div class="details-item" onclick="showDialog('prediction-dialog-{{ loop.index }}')">
+                            <i class="fas fa-magic"></i> Предсказание модели
+                        </div>
+                        <div class="details-item" onclick="showDialog('boxes-dialog-{{ loop.index }}')">
+                            <i class="fas fa-vector-square"></i> Рамки текста
+                        </div>
+                        <div class="details-item" onclick="showDialog('text-dialog-{{ loop.index }}')">
+                            <i class="fas fa-language"></i> Текст и перевод
+                        </div>
+                    </div>
+                </div>
+            </div>
+                
+            <!-- Dialogs -->
+            <!-- Original Image Dialog -->
+            <div id="original-dialog-{{ loop.index }}" class="dialog">
+                <div class="dialog-content">
+                    <div class="dialog-header">
+                        <h3 class="dialog-title">Исходное изображение</h3>
+                        <button class="dialog-close" onclick="hideDialog('original-dialog-{{ loop.index }}')">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="dialog-body">
+                        <img src="data:image/png;base64,{{ file_result.original }}" alt="Исходное изображение" class="dialog-image">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Prediction Dialog -->
+            <div id="prediction-dialog-{{ loop.index }}" class="dialog">
+                <div class="dialog-content">
+                    <div class="dialog-header">
+                        <h3 class="dialog-title">Предсказание модели</h3>
+                        <button class="dialog-close" onclick="hideDialog('prediction-dialog-{{ loop.index }}')">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="dialog-body">
+                        <img src="data:image/png;base64,{{ file_result.prediction }}" alt="Предсказание модели" class="dialog-image">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Boxes Dialog -->
+            <div id="boxes-dialog-{{ loop.index }}" class="dialog">
+                <div class="dialog-content">
+                    <div class="dialog-header">
+                        <h3 class="dialog-title">Изображение с рамками текста</h3>
+                        <button class="dialog-close" onclick="hideDialog('boxes-dialog-{{ loop.index }}')">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="dialog-body">
+                        <img src="data:image/png;base64,{{ file_result.boxes_image }}" alt="Изображение с рамками текста" class="dialog-image">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Text Dialog -->
+            <div id="text-dialog-{{ loop.index }}" class="dialog">
+                <div class="dialog-content">
+                    <div class="dialog-header">
+                        <h3 class="dialog-title">Извлеченный текст и перевод</h3>
+                        <button class="dialog-close" onclick="hideDialog('text-dialog-{{ loop.index }}')">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="dialog-body">
+                        <div class="text-list">
+                            {% for block in file_result.text_blocks %}
+                            <div class="text-item">
+                                <div class="text-item-header">Блок #{{ block.id + 1 }}</div>
+                                <div class="text-original">
+                                    <strong>Оригинал:</strong> {{ block.text }}
+                                </div>
+                                <div class="text-translated">
+                                    <strong>Перевод:</strong> {{ block.translated_text }}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            
+            <!-- Нижняя панель навигации -->
+            <div class="bottom-nav">
+                <div class="bottom-nav-controls">
+                    <button id="bottom-nav-prev" class="btn btn-secondary" disabled>
+                        <i class="fas fa-chevron-left"></i> Назад
+                    </button>
+                    <div class="nav-page-info">
+                        Страница <span id="bottom-nav-current">1</span> из <span id="bottom-nav-total">{{ results|length }}</span>
+                    </div>
+                    <button id="bottom-nav-next" class="btn btn-secondary">
+                        Вперед <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+                <button id="exit-reader-mode" class="btn btn-primary">
+                    <i class="fas fa-times"></i> Выйти из режима чтения
+                </button>
+            </div>
+        </div>
+        <div id="back-to-top" class="back-to-top">
+            <i class="fas fa-arrow-up"></i>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Spinner -->
+    <div id="spinner-container" class="spinner-container">
+        <div class="spinner"></div>
+        <div class="spinner-text">Обработка изображений...</div>
+    </div>
+<script type="module" src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
