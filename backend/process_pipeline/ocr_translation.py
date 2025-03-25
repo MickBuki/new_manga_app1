@@ -20,7 +20,8 @@ from backend.manga_editor import MangaEditor
 
 def process_ocr_and_translation(image_path, seg_results, bubble_mask=None, text_background_mask=None, output_path=None, 
                                translation_method=None, openai_api_key=None, ocr_engine=None, edit_mode=False, 
-                               batch_id=None, file_index=0, original_filename=None, source_language='zh', target_language='ru'):
+                               batch_id=None, file_index=0, original_filename=None, source_language='zh', target_language='ru',
+                               user_id=None):
     """
     Комплексная обработка OCR и перевода изображения с автоматическим выбором OCR
     
@@ -39,13 +40,20 @@ def process_ocr_and_translation(image_path, seg_results, bubble_mask=None, text_
         original_filename: Оригинальное имя файла
         source_language: Язык оригинала
         target_language: Язык перевода
+        user_id: ID пользователя
         
     Returns:
         dict: Результаты обработки
     """
+    from backend.file_utils.user_files import get_user_directory
+    
     if output_path is None:
         output_filename = generate_unique_filename('final_results', '.json')
-        output_path = get_temp_filepath(output_filename)
+        if user_id:
+            user_temp_dir = get_user_directory(user_id, "temp")
+            output_path = os.path.join(user_temp_dir, output_filename)
+        else:
+            output_path = get_temp_filepath(output_filename)
         
     settings = get_settings()
     logger = get_app_logger()
@@ -143,6 +151,13 @@ def process_ocr_and_translation(image_path, seg_results, bubble_mask=None, text_
             logger.info(f"Создание сессии редактирования для {original_filename}")
             logger.debug(f"batch_id: {batch_id}, file_index: {file_index}")
             
+            editor_sessions_dir = settings.editor_sessions_dir
+            if user_id:
+                # Используем пользовательскую директорию для редактирования
+                editor_sessions_dir = get_user_directory(user_id, "editor")
+            
+            manga_editor = MangaEditor(editor_sessions_dir)
+            
             session_id = manga_editor.create_session(
                 image_path,
                 text_removed_img,
@@ -166,6 +181,7 @@ def process_ocr_and_translation(image_path, seg_results, bubble_mask=None, text_
             
             seg_results['edit_session_id'] = session_id
             seg_results['edit_batch_id'] = batch_id
+            seg_results['user_id'] = user_id  # Добавляем ID пользователя
         
         logger.info("Создание изображения с переводом...")
         translated_img_path = image_path + ".translated.png"

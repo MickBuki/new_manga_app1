@@ -13,10 +13,12 @@
         <div class="container header-content">
             <h1>Manga Translator</h1>
             <p>Автоматическое распознавание и перевод текста в манге с использованием AI</p>
+            
+            <!-- Информация о пользователе -->
             <div class="user-info">
                 {% if current_user %}
                 <span class="username">{{ current_user.username }}</span>
-                <a href="{{ url_for('auth.logout') }}" class="btn btn-sm btn-outline">
+                <a href="{{ url_for('auth.logout') }}" class="btn btn-sm btn-outline" title="Выйти">
                     <i class="fas fa-sign-out-alt"></i>
                 </a>
                 {% else %}
@@ -25,6 +27,7 @@
                 </a>
                 {% endif %}
             </div>
+            
             <div class="theme-switch-wrapper">
                 <label class="theme-switch" for="theme-switch">
                     <input type="checkbox" id="theme-switch" />

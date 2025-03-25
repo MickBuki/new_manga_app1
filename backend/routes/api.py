@@ -9,12 +9,13 @@ import tempfile
 import zipfile
 from reportlab.pdfgen import canvas
 from backend.manga_editor import MangaEditor
+from backend.auth import api_login_required, get_current_user
 
 # Инициализация редактора манги
 manga_editor = MangaEditor()
-
 @api_bp.route('/edit/update_translation', methods=['POST'])
-def api_update_translation():
+@api_login_required
+def api_update_translation(current_user):
     """API для обновления переведенного текста и стиля"""
     try:
         data = request.json
@@ -32,7 +33,8 @@ def api_update_translation():
         return jsonify({"success": False, "error": str(e)}), 500
 
 @api_bp.route('/edit/generate_preview', methods=['POST'])
-def api_generate_preview():
+@api_login_required
+def api_generate_preview(current_user):
     """API для генерации предпросмотра с обновленным текстом"""
     try:
         data = request.json
@@ -50,7 +52,8 @@ def api_generate_preview():
         return jsonify({"success": False, "error": str(e)}), 500
 
 @api_bp.route('/edit/save', methods=['POST'])
-def api_save_edited():
+@api_login_required
+def api_save_edited(current_user):
     """API для сохранения отредактированного изображения"""
     try:
         data = request.json
@@ -69,7 +72,8 @@ def api_save_edited():
         return jsonify({"success": False, "error": str(e)}), 500
 
 @api_bp.route('/download/<format_type>', methods=['POST'])
-def api_download_results(format_type):
+@api_login_required
+def api_download_results(format_type, current_user):
     """API для скачивания результатов в различных форматах"""
     try:
         data = request.json

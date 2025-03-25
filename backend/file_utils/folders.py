@@ -5,6 +5,7 @@ import os
 import re
 from backend.config import get_settings
 from backend.logger import get_app_logger
+from backend.file_utils.user_files import get_user_directory, ensure_user_directories
 
 def natural_sort_key(s):
     """
@@ -19,17 +20,26 @@ def natural_sort_key(s):
     return [int(text) if text.isdigit() else text.lower() 
             for text in re.split(r'(\d+)', s)]
 
-def get_manga_folders():
+def get_manga_folders(user_id=None):
     """
     Получение списка папок с мангой из директории books
     Сортирует папки и изображения внутри них
     
+    Args:
+        user_id: ID пользователя (если None, используется общая директория)
+        
     Returns:
         list: Список папок с мангой и изображениями
     """
     settings = get_settings()
     logger = get_app_logger()
-    books_dir = settings.books_dir
+    
+    # Если указан пользователь, получаем его директорию books
+    if user_id:
+        books_dir = get_user_directory(user_id, "books")
+        ensure_user_directories(user_id)  # Гарантируем создание директорий
+    else:
+        books_dir = settings.books_dir
     
     # Создаем папку books, если она не существует
     if not os.path.exists(books_dir):
@@ -56,12 +66,14 @@ def get_manga_folders():
                 
                 # Проверяем, что это файл изображения
                 if os.path.isfile(image_path) and image_name.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
-                    # Для простоты формируем URL как путь к файлу (в реальном приложении лучше использовать маршрут Flask)
+                    # Формируем URL для миниатюры
+                    thumbnail_url = f'/thumbnails/{user_id}/{folder_name}/{image_name}' if user_id else f'/static/thumbnails/{folder_name}/{image_name}'
+                    
                     image_count += 1
                     folder_images.append({
                         'name': image_name,
                         'path': image_path,
-                        'thumbnail_url': f'/static/thumbnails/{folder_name}/{image_name}',
+                        'thumbnail_url': thumbnail_url,
                     })
             
             # Сортируем изображения по имени
@@ -94,7 +106,8 @@ def ensure_dirs_exist():
         settings.static_dir,
         settings.thumbnails_dir,
         settings.temp_dir,
-        settings.editor_sessions_dir
+        settings.editor_sessions_dir,
+        settings.data_dir
     ]
     
     for directory in directories:

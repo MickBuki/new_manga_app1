@@ -25,6 +25,7 @@ class AppSettings:
     use_gpu: bool = False
     
     # Пути к ресурсам
+    data_dir: str = os.path.join(project_root, "data")
     books_dir: str = os.path.join(project_root, "data", "books")
     translated_books_dir: str = os.path.join(project_root, "data", "translated_books")
     static_dir: str = os.path.join(project_root, "frontend", "static")
@@ -45,7 +46,6 @@ class AppSettings:
     openai_api_key: str = ""  # Ключ API OpenAI
     
     # Добавим новое поле для секретного ключа JWT
-    data_dir: str = os.path.join(project_root, "data")
     jwt_secret_key: str = os.environ.get('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
     jwt_token_expires: int = 24 * 60 * 60  # 24 часа в секундах
 

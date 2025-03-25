@@ -10,13 +10,13 @@ import io
 import uuid
 import numpy as np
 from PIL import Image as PILImage
-
+from backend.file_utils.user_files import get_user_directory
 from backend.config import get_settings
 from backend.logger import get_app_logger
 from backend.models import get_bubble_model, get_text_model
 from backend.file_utils.temp import get_temp_filepath
 
-def process_segmentation(image_path, output_path=None):
+def process_segmentation(image_path, output_path=None, user_id=None):
     """
     Обработка изображения с использованием двух моделей YOLO
     с разделением на пузыри и текстовые блоки на фоне
@@ -24,13 +24,25 @@ def process_segmentation(image_path, output_path=None):
     Args:
         image_path: Путь к изображению
         output_path: Путь для сохранения результатов
+        user_id: ID пользователя (если указан, используются пользовательские директории)
         
     Returns:
         tuple: (результаты сегментации, маска пузырей, маска текстовых блоков)
     """
+    from backend.file_utils.user_files import get_user_directory
+    
+    # ВАЖНО: Если output_path уже указан, НЕ переопределяем его
     if output_path is None:
-        output_filename = generate_unique_filename('segmentation_results', '.json')
-        output_path = get_temp_filepath(output_filename)
+        if user_id:
+            # Если указан пользователь, используем его директорию temp
+            unique_id = str(uuid.uuid4().hex)
+            filename = f'segmentation_results_{unique_id}.json'
+            user_temp_dir = get_user_directory(user_id, "temp")
+            output_path = os.path.join(user_temp_dir, filename)
+        else:
+            # Иначе используем общую директорию temp
+            output_filename = generate_unique_filename('segmentation_results', '.json')
+            output_path = get_temp_filepath(output_filename)
     
     settings = get_settings()
     logger = get_app_logger()
@@ -229,7 +241,7 @@ def process_segmentation(image_path, output_path=None):
             json.dump(results, f)
         
         logger.info(f"Сегментация завершена за {time.time() - start_time:.2f} секунд")
-        return results, dilated_bubble_mask, dilated_text_background_mask
+        return results, dilated_bubble_mask, dilated_text_background_mask, output_path
         
     except Exception as e:
         logger.error(f"Ошибка в process_segmentation: {e}", exc_info=True)

@@ -9,19 +9,20 @@ import io
 import concurrent.futures
 from PIL import Image
 import shutil
-
+import uuid
 from backend.logger import get_app_logger
 from backend.config import get_settings
 from .temp import generate_unique_filename, save_text_blocks_info, get_temp_filepath
 from .folders import natural_sort_key
 from backend.process_pipeline import process_segmentation, process_ocr_and_translation
+from backend.file_utils.user_files import get_user_directory
 
-def process_single_file(file, translation_method, openai_api_key, ocr_engine, edit_mode=False, batch_id=None, file_index=0, source_language='zh', target_language='ru'):
+def process_single_file(file, translation_method, openai_api_key, ocr_engine, edit_mode=False, batch_id=None, file_index=0, source_language='zh', target_language='ru', user_id=None):
     """
     Обрабатывает один файл изображения и возвращает результаты
     
     Args:
-        file: Файл из request.files
+        file: Файл из request.files или путь к файлу
         translation_method: Метод перевода ('google' или 'openai')
         openai_api_key: API ключ OpenAI (если используется translation_method='openai')
         ocr_engine: OCR движок ('auto', 'mangaocr', 'paddleocr', 'easyocr', 'tesseract')
@@ -30,40 +31,61 @@ def process_single_file(file, translation_method, openai_api_key, ocr_engine, ed
         file_index: Индекс файла в группе
         source_language: Язык оригинала
         target_language: Язык перевода
+        user_id: ID пользователя (если None, используются общие директории)
         
     Returns:
         tuple: (путь к временному файлу, результаты обработки)
     """
-    
+    from backend.file_utils.user_files import get_user_directory
     
     logger = get_app_logger()
     settings = get_settings()
     
     # Сохраняем оригинальное имя файла
-    original_filename = file.filename
+    if isinstance(file, str):
+        # Если file - путь к файлу
+        original_filename = os.path.basename(file)
+        file_path = file
+    else:
+        # Если file - объект из request.files
+        original_filename = file.filename
+        
+        # Создаем уникальные имена для временных файлов
+        unique_id = str(uuid.uuid4().hex)
+        temp_filename = f'temp_image_{unique_id}.png'
+        
+        if user_id:
+            # Если указан пользователь, используем его директорию temp
+            user_temp_dir = get_user_directory(user_id, "temp")
+            file_path = os.path.join(user_temp_dir, temp_filename)
+        else:
+            file_path = get_temp_filepath(temp_filename)
+        
+        # Сохраняем файл
+        file.save(file_path)
     
-    # Создаем уникальные имена для временных файлов
-    temp_filename = generate_unique_filename('temp_image', '.png')
-    file_path = get_temp_filepath(temp_filename)
-    file.save(file_path)
+    # Генерируем пути для результатов сегментации и финальных результатов
+    # ВАЖНО: Больше не используем get_temp_filepath для имен файлов в пользовательской директории
+    unique_id = str(uuid.uuid4().hex)
     
-    # Уникальный идентификатор для временных файлов
-    unique_id = generate_unique_filename('', '')
-    seg_results_filename = f'segmentation_results_{unique_id}.json'
-    final_results_filename = f'final_results_{unique_id}.json'
-    seg_results_path = get_temp_filepath(seg_results_filename)
-    final_results_path = get_temp_filepath(final_results_filename)
+    # При вызове process_segmentation НЕ указываем путь к файлу для результатов
+    # Внутри функция сама сгенерирует правильный путь
+    logger.info(f"Сегментация для {original_filename}...")
+    seg_results, bubble_mask, text_background_mask, seg_results_path = process_segmentation(file_path, user_id=user_id)
     
-    logger.info(f"Обработка файла {original_filename}")
+    # Генерируем путь для финальных результатов 
+    if user_id:
+        # Используем пользовательскую временную директорию
+        user_temp_dir = get_user_directory(user_id, "temp")
+        final_results_filename = f'final_results_{unique_id}.json'
+        final_results_path = os.path.join(user_temp_dir, final_results_filename)
+    else:
+        final_results_filename = f'final_results_{unique_id}.json'
+        final_results_path = get_temp_filepath(final_results_filename)
     
+    # Сохраняем оригинальное имя файла в результатах для дальнейшего использования
+    seg_results['original_filename'] = original_filename
     try:
-        # Выполняем сегментацию
-        logger.info(f"Сегментация для {original_filename}...")
-        seg_results, bubble_mask, text_background_mask = process_segmentation(file_path, seg_results_path)
-        
-        # Сохраняем оригинальное имя файла в результатах для дальнейшего использования
-        seg_results['original_filename'] = original_filename
-        
         # Выполняем OCR и перевод с учетом режима редактирования
         logger.info(f"OCR и перевод для {original_filename}...")
         logger.debug(f"Режим редактирования: {edit_mode}, batch_id: {batch_id}, file_index: {file_index}")
@@ -82,23 +104,30 @@ def process_single_file(file, translation_method, openai_api_key, ocr_engine, ed
             file_index=file_index,
             original_filename=original_filename,
             source_language=source_language,
-            target_language=target_language
+            target_language=target_language,
+            user_id=user_id  # Передаем ID пользователя
         )
-        
+            
         # Проверяем на наличие ошибки перевода
         if file_result.get('error'):
             logger.error(f"Ошибка при переводе {original_filename}: {file_result.get('error_message')}")
             return file_path, file_result
-        
+            
         file_result['filename'] = original_filename
         
         # Сохраняем переведенное изображение для возможности скачивания
         try:
-            # Создаем директорию, если ее нет
-            os.makedirs(settings.translated_books_dir, exist_ok=True)
+            if user_id:
+                # Используем пользовательскую директорию для переведенных файлов
+                translated_dir = get_user_directory(user_id, "translated")
+                os.makedirs(translated_dir, exist_ok=True)
+                translated_image_path = os.path.join(translated_dir, original_filename)
+            else:
+                # Создаем директорию, если ее нет
+                os.makedirs(settings.translated_books_dir, exist_ok=True)
+                translated_image_path = os.path.join(settings.translated_books_dir, original_filename)
             
             # Сохраняем изображение из base64
-            translated_image_path = os.path.join(settings.translated_books_dir, original_filename)
             translated_base64 = file_result['translated']
             img_data = base64.b64decode(translated_base64)
             img = Image.open(io.BytesIO(img_data))
@@ -126,7 +155,7 @@ def process_single_file(file, translation_method, openai_api_key, ocr_engine, ed
                 except Exception as e:
                     logger.warning(f"Ошибка при удалении временного файла {path}: {e}")
 
-def process_single_image(image_path, translation_method, openai_api_key, ocr_engine, translated_folder, edit_mode=False, batch_id=None, file_index=0, source_language='zh', target_language='ru'):
+def process_single_image(image_path, translation_method, openai_api_key, ocr_engine, translated_folder, edit_mode=False, batch_id=None, file_index=0, source_language='zh', target_language='ru', user_id=None):
     """
     Обрабатывает одно изображение из папки манги
     
@@ -141,36 +170,50 @@ def process_single_image(image_path, translation_method, openai_api_key, ocr_eng
         file_index: Индекс файла в группе
         source_language: Язык оригинала
         target_language: Язык перевода
+        user_id: ID пользователя
         
     Returns:
         tuple: (путь к временному файлу, результаты обработки)
     """
+    from backend.file_utils.user_files import get_user_directory
     
     logger = get_app_logger()
     
-    # Создаем уникальные имена для временных файлов
-    unique_id = generate_unique_filename('', '')
-    temp_filename = generate_unique_filename('temp_image', '.png')
-    file_path = get_temp_filepath(temp_filename)
+    # Создаем уникальный идентификатор
+    unique_id = str(uuid.uuid4().hex)
+    
+    # Создаем временный файл
+    if user_id:
+        user_temp_dir = get_user_directory(user_id, "temp")
+        temp_filename = f'temp_image_{unique_id}.png'
+        file_path = os.path.join(user_temp_dir, temp_filename)
+    else:
+        temp_filename = generate_unique_filename('temp_image', '.png')
+        file_path = get_temp_filepath(temp_filename)
+    
+    # Копируем файл
     shutil.copy(image_path, file_path)
     
     # Получаем имя файла
     image_name = os.path.basename(image_path)
     
-    # Обновленные пути для временных файлов
-    seg_results_filename = f'segmentation_results_{unique_id}.json'
-    final_results_filename = f'final_results_{unique_id}.json'
-    seg_results_path = get_temp_filepath(seg_results_filename)
-    final_results_path = get_temp_filepath(final_results_filename)
-    
     logger.info(f"Обработка файла {image_name} из папки")
     
     try:
-        # Выполняем сегментацию
+        # Выполняем сегментацию (без указания пути для результатов)
         logger.info(f"Сегментация для {image_name}...")
-        seg_results, bubble_mask, text_background_mask = process_segmentation(file_path, seg_results_path)
+        seg_results, bubble_mask, text_background_mask, seg_results_path = process_segmentation(file_path, user_id=user_id)
         
-        # Выполняем OCR и перевод с учетом режима редактирования и batch_id
+        # Генерируем путь для финальных результатов
+        if user_id:
+            user_temp_dir = get_user_directory(user_id, "temp")
+            final_results_filename = f'final_results_{unique_id}.json'
+            final_results_path = os.path.join(user_temp_dir, final_results_filename)
+        else:
+            final_results_filename = f'final_results_{unique_id}.json'
+            final_results_path = get_temp_filepath(final_results_filename)
+        
+        # Выполняем OCR и перевод
         logger.info(f"OCR и перевод для {image_name}...")
         file_result = process_ocr_and_translation(
             file_path,
@@ -186,7 +229,8 @@ def process_single_image(image_path, translation_method, openai_api_key, ocr_eng
             file_index=file_index,
             original_filename=image_name,
             source_language=source_language,
-            target_language=target_language
+            target_language=target_language,
+            user_id=user_id  # Передаем ID пользователя
         )
         
         # Сохраняем переведенное изображение в папку translated_books
@@ -220,7 +264,7 @@ def process_single_image(image_path, translation_method, openai_api_key, ocr_eng
                 except Exception as e:
                     logger.warning(f"Ошибка при удалении временного файла {path}: {e}")
 
-def process_manga_folder(folder_path, translation_method='google', openai_api_key='', ocr_engine='mangaocr', selected_images=None, edit_mode=False, source_language='zh', target_language='ru'):
+def process_manga_folder(folder_path, translation_method='google', openai_api_key='', ocr_engine='mangaocr', selected_images=None, edit_mode=False, source_language='zh', target_language='ru', user_id=None):
     """
     Обработка всех изображений в папке манги с параллельной обработкой
     и сохранением исходного порядка файлов
@@ -242,8 +286,17 @@ def process_manga_folder(folder_path, translation_method='google', openai_api_ke
     settings = get_settings()
     temp_files = []
     
-    # Создаем папку для переведенных изображений
-    translated_folder = folder_path.replace(settings.books_dir, settings.translated_books_dir)
+    if user_id:
+        # Получаем директории пользователя
+        user_books_dir = get_user_directory(user_id, "books")
+        user_translated_dir = get_user_directory(user_id, "translated")
+        
+        # Получаем относительный путь папки от директории книг
+        rel_path = os.path.relpath(folder_path, user_books_dir)
+        translated_folder = os.path.join(user_translated_dir, rel_path)
+    else:
+        translated_folder = folder_path.replace(settings.books_dir, settings.translated_books_dir)
+    
     os.makedirs(translated_folder, exist_ok=True)
     
     try:
@@ -291,7 +344,8 @@ def process_manga_folder(folder_path, translation_method='google', openai_api_ke
                     batch_id,  # Передаем batch_id
                     i,  # Передаем индекс файла
                     source_language,  # Передаем исходный язык
-                    target_language   # Передаем язык перевода
+                    target_language,   # Передаем язык перевода
+                    user_id
                 )
                 # Связываем future с индексом в исходном списке и именем файла
                 future_to_index[future] = {

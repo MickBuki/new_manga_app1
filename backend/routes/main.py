@@ -1,29 +1,34 @@
 from . import main_bp
-from flask import render_template, request, flash
-from backend.auth import get_current_user, login_required
+from flask import render_template, request, redirect, url_for, flash
 import os
-import uuid
 import time
 import concurrent.futures
 import re
+import uuid
 from backend.config import get_settings
 from backend.file_utils.processing import process_single_file, process_manga_folder
 from backend.file_utils.folders import get_manga_folders, natural_sort_key
 from backend.models import get_optimal_ocr_engine
+from backend.auth import get_current_user, login_required
+from backend.file_utils.user_files import get_user_directory, ensure_user_directories, save_file
 
 @main_bp.route('/', methods=['GET', 'POST'])
+@login_required
 def index():
     """Главная страница приложения"""
-    current_user = get_current_user()
     settings = get_settings()
     USE_GPU = settings.use_gpu
+    current_user = get_current_user()
 
+    # Если пользователь не авторизован, перенаправляем на страницу входа
+    if not current_user:
+        return redirect(url_for('auth.login'))
 
     results = None
     error = None
     
-    # Получаем список папок с мангой
-    manga_folders = get_manga_folders()
+    # Получаем список папок с мангой для текущего пользователя
+    manga_folders = get_manga_folders(current_user.id)
     
     if request.method == 'POST':
         # Определяем тип формы
@@ -49,7 +54,8 @@ def index():
         if translation_method == 'openai' and not openai_api_key:
             error = "Необходимо указать API ключ OpenAI для перевода через gpt-4o-mini"
             return render_template('index.html', results=None, error=error, 
-                                 manga_folders=manga_folders, use_gpu=USE_GPU, current_user=current_user)
+                                 manga_folders=manga_folders, use_gpu=USE_GPU,
+                                 current_user=current_user)
         
         if form_type == 'individual_files':
             if 'files' not in request.files:
@@ -57,6 +63,9 @@ def index():
             files = request.files.getlist('files')
             if not files or all(file.filename == '' for file in files):
                 return "Файлы не выбраны", 400
+            
+            # Создаем директории для пользователя
+            ensure_user_directories(current_user.id)
             
             temp_files = []
             results_with_order = []
@@ -81,9 +90,12 @@ def index():
                     
                     # Создаем список задач с задержкой между запусками
                     for i, file in enumerate(file_list):
+                        # Сохраняем файл во временную директорию пользователя
+                        saved_file_path = save_file(file, current_user.id, "temp")
+                        
                         future = executor.submit(
                             process_single_file, 
-                            file, 
+                            saved_file_path,  # Передаем путь к сохраненному файлу
                             translation_method, 
                             openai_api_key, 
                             ocr_engine,
@@ -91,7 +103,8 @@ def index():
                             batch_id,  # Передаем batch_id
                             i,  # Передаем индекс файла
                             source_language,
-                            target_language
+                            target_language,
+                            current_user.id  # Передаем ID пользователя
                         )
                         # Связываем future с индексом файла и именем файла
                         future_to_index[future] = {
@@ -132,11 +145,13 @@ def index():
                             else:
                                 error = file_result.get('error_message', 'Неизвестная ошибка')
                                 return render_template('index.html', results=None, error=error, 
-                                                     manga_folders=manga_folders, use_gpu=USE_GPU, current_user=current_user)
+                                                     manga_folders=manga_folders, use_gpu=USE_GPU,
+                                                     current_user=current_user)
                         except Exception as e:
                             error = f"Ошибка обработки файла: {str(e)}"
                             return render_template('index.html', results=None, error=error, 
-                                                 manga_folders=manga_folders, use_gpu=USE_GPU, current_user=current_user)
+                                                 manga_folders=manga_folders, use_gpu=USE_GPU,
+                                                 current_user=current_user)
                 
                 # Сортируем результаты по исходному порядку
                 results = sorted(results_with_order, key=lambda x: x['original_index'])
@@ -147,7 +162,8 @@ def index():
                 error = f"Ошибка обработки: {str(e)}"
                 print(error_traceback)
                 return render_template('index.html', results=None, error=error, 
-                                     manga_folders=manga_folders, use_gpu=USE_GPU, current_user=current_user)
+                                     manga_folders=manga_folders, use_gpu=USE_GPU,
+                                     current_user=current_user)
             finally:
                 # Удаляем временные файлы
                 for file_path in temp_files:
@@ -162,30 +178,51 @@ def index():
             # Проверка, выбрана ли папка для перевода всей папки
             folder_path = request.form.get('translate_all_folder')
             if folder_path:
+                # Проверяем, принадлежит ли папка пользователю
+                user_books_dir = get_user_directory(current_user.id, "books")
+                if not folder_path.startswith(user_books_dir):
+                    error = "Доступ запрещен: папка не принадлежит текущему пользователю"
+                    return render_template('index.html', results=None, error=error, 
+                                         manga_folders=manga_folders, use_gpu=USE_GPU,
+                                         current_user=current_user)
+                
                 results = process_manga_folder(folder_path, translation_method, 
                                              openai_api_key, ocr_engine, edit_mode=edit_mode, 
-                                             source_language=source_language, target_language=target_language)
+                                             source_language=source_language, target_language=target_language,
+                                             user_id=current_user.id)
             else:
                 # Проверка, выбрана ли папка и выбранные изображения
                 folder_path = request.form.get('folder_path')
                 selected_images = request.form.getlist('selected_images')
                 
                 if folder_path and selected_images:
+                    # Проверяем, принадлежит ли папка пользователю
+                    user_books_dir = get_user_directory(current_user.id, "books")
+                    if not folder_path.startswith(user_books_dir):
+                        error = "Доступ запрещен: папка не принадлежит текущему пользователю"
+                        return render_template('index.html', results=None, error=error, 
+                                             manga_folders=manga_folders, use_gpu=USE_GPU,
+                                             current_user=current_user)
+                    
                     # Сортируем выбранные изображения по естественному порядку
                     selected_images = sorted(selected_images, key=lambda x: natural_sort_key(os.path.basename(x)))
                     results = process_manga_folder(folder_path, translation_method, 
                                                  openai_api_key, ocr_engine, 
                                                  selected_images, edit_mode=edit_mode, 
-                                                 source_language=source_language, target_language=target_language)
+                                                 source_language=source_language, target_language=target_language,
+                                                 user_id=current_user.id)
                 elif folder_path:
                     error = "Не выбрано ни одного изображения для перевода"
                     return render_template('index.html', results=None, error=error, 
-                                        manga_folders=manga_folders, use_gpu=USE_GPU, current_user=current_user)
+                                        manga_folders=manga_folders, use_gpu=USE_GPU,
+                                        current_user=current_user)
                 else:
                     error = "Не выбрана папка для перевода"
                     return render_template('index.html', results=None, error=error, 
-                                        manga_folders=manga_folders, use_gpu=USE_GPU, current_user=current_user)
+                                        manga_folders=manga_folders, use_gpu=USE_GPU,
+                                        current_user=current_user)
     
     # Всегда возвращаем шаблон index.html
     return render_template('index.html', results=results, error=error, 
-                          manga_folders=manga_folders, use_gpu=USE_GPU, current_user=current_user)
+                          manga_folders=manga_folders, use_gpu=USE_GPU,
+                          current_user=current_user)
