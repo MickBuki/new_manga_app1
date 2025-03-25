@@ -16,6 +16,9 @@ app = Flask(__name__,
             static_folder='../frontend/static',
             template_folder='../frontend/templates')
 
+# Настраиваем секретный ключ для сессий
+app.secret_key = settings.jwt_secret_key
+
 # Регистрируем blueprints для маршрутов
 register_blueprints(app)
 

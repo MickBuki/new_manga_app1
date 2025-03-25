@@ -208,6 +208,81 @@ input:checked + .slider:after {
     left: 25%;
 }
 
+/* Стили для аутентификации */
+.auth-card {
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.auth-links {
+    margin-top: 20px;
+    text-align: center;
+}
+
+.auth-links a {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.auth-links a:hover {
+    text-decoration: underline;
+}
+
+/* Стили для flash-сообщений */
+.alert {
+    margin-bottom: 20px;
+    padding: 12px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+}
+
+.alert i {
+    margin-right: 10px;
+    font-size: 1.2em;
+}
+
+.alert-error {
+    background-color: var(--error-bg);
+    color: var(--error);
+    border: 1px solid var(--error);
+}
+
+.alert-success {
+    background-color: var(--success-bg);
+    color: var(--success);
+    border: 1px solid var(--success);
+}
+
+.alert-info {
+    background-color: var(--info-bg);
+    color: var(--info);
+    border: 1px solid var(--info);
+}
+
+.alert-warning {
+    background-color: var(--warning-bg);
+    color: var(--warning);
+    border: 1px solid var(--warning);
+}
+
+/* Стили для информации о пользователе */
+.user-info {
+    display: flex;
+    align-items: center;
+    margin-right: 15px;
+}
+
+.user-info .username {
+    color: var(--light);
+    font-weight: bold;
+    margin-right: 10px;
+}
+
+.user-info .btn {
+    padding: 5px 10px;
+}
+
 /* Панель навигации внизу */
 .bottom-nav {
     position: fixed;

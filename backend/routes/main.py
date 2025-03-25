@@ -1,5 +1,6 @@
 from . import main_bp
-from flask import render_template, request
+from flask import render_template, request, flash
+from backend.auth import get_current_user, login_required
 import os
 import uuid
 import time
@@ -13,6 +14,7 @@ from backend.models import get_optimal_ocr_engine
 @main_bp.route('/', methods=['GET', 'POST'])
 def index():
     """Главная страница приложения"""
+    current_user = get_current_user()
     settings = get_settings()
     USE_GPU = settings.use_gpu
 
@@ -47,7 +49,7 @@ def index():
         if translation_method == 'openai' and not openai_api_key:
             error = "Необходимо указать API ключ OpenAI для перевода через gpt-4o-mini"
             return render_template('index.html', results=None, error=error, 
-                                 manga_folders=manga_folders, use_gpu=USE_GPU)
+                                 manga_folders=manga_folders, use_gpu=USE_GPU, current_user=current_user)
         
         if form_type == 'individual_files':
             if 'files' not in request.files:
@@ -130,11 +132,11 @@ def index():
                             else:
                                 error = file_result.get('error_message', 'Неизвестная ошибка')
                                 return render_template('index.html', results=None, error=error, 
-                                                     manga_folders=manga_folders, use_gpu=USE_GPU)
+                                                     manga_folders=manga_folders, use_gpu=USE_GPU, current_user=current_user)
                         except Exception as e:
                             error = f"Ошибка обработки файла: {str(e)}"
                             return render_template('index.html', results=None, error=error, 
-                                                 manga_folders=manga_folders, use_gpu=USE_GPU)
+                                                 manga_folders=manga_folders, use_gpu=USE_GPU, current_user=current_user)
                 
                 # Сортируем результаты по исходному порядку
                 results = sorted(results_with_order, key=lambda x: x['original_index'])
@@ -145,7 +147,7 @@ def index():
                 error = f"Ошибка обработки: {str(e)}"
                 print(error_traceback)
                 return render_template('index.html', results=None, error=error, 
-                                     manga_folders=manga_folders, use_gpu=USE_GPU)
+                                     manga_folders=manga_folders, use_gpu=USE_GPU, current_user=current_user)
             finally:
                 # Удаляем временные файлы
                 for file_path in temp_files:
@@ -178,12 +180,12 @@ def index():
                 elif folder_path:
                     error = "Не выбрано ни одного изображения для перевода"
                     return render_template('index.html', results=None, error=error, 
-                                        manga_folders=manga_folders, use_gpu=USE_GPU)
+                                        manga_folders=manga_folders, use_gpu=USE_GPU, current_user=current_user)
                 else:
                     error = "Не выбрана папка для перевода"
                     return render_template('index.html', results=None, error=error, 
-                                        manga_folders=manga_folders, use_gpu=USE_GPU)
+                                        manga_folders=manga_folders, use_gpu=USE_GPU, current_user=current_user)
     
     # Всегда возвращаем шаблон index.html
     return render_template('index.html', results=results, error=error, 
-                          manga_folders=manga_folders, use_gpu=USE_GPU)
+                          manga_folders=manga_folders, use_gpu=USE_GPU, current_user=current_user)

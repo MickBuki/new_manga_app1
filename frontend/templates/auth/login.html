@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вход - Manga Translator</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <!-- Header Section -->
+    <header class="header">
+        <div class="container header-content">
+            <h1><a href="/" class="header-link">Manga Translator</a></h1>
+            <p>Автоматическое распознавание и перевод текста в манге</p>
+            <div class="theme-switch-wrapper">
+                <label class="theme-switch" for="theme-switch">
+                    <input type="checkbox" id="theme-switch" />
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="container mt-4">
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }}">
+            <i class="fas fa-{% if category == 'error' %}exclamation-triangle{% else %}info-circle{% endif %}"></i>
+            <div>{{ message }}</div>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+        
+        <!-- Login Form -->
+        <div class="card mb-4 auth-card">
+            <div class="card-header">
+                <h2 class="card-title">Вход в аккаунт</h2>
+            </div>
+            <div class="card-body">
+                <form method="post" action="{{ url_for('auth.login') }}">
+                    <div class="form-group">
+                        <label for="username" class="form-label">Имя пользователя:</label>
+                        <input type="text" id="username" name="username" class="form-control" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="password" class="form-label">Пароль:</label>
+                        <input type="password" id="password" name="password" class="form-control" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-sign-in-alt"></i> Войти
+                        </button>
+                    </div>
+                    
+                    <div class="auth-links">
+                        <p>
+                            Нет аккаунта? 
+                            <a href="{{ url_for('auth.register') }}">Зарегистрироваться</a>
+                        </p>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // Функция для загрузки темы из localStorage
+    document.addEventListener('DOMContentLoaded', function() {
+        const toggleSwitch = document.getElementById('theme-switch');
+        const currentTheme = localStorage.getItem('theme') || 'light';
+        
+        document.documentElement.setAttribute('data-theme', currentTheme);
+        toggleSwitch.checked = currentTheme === 'dark';
+        
+        toggleSwitch.addEventListener('change', function() {
+            if (this.checked) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+            } else {
+                document.documentElement.setAttribute('data-theme', 'light');
+                localStorage.setItem('theme', 'light');
+            }
+        });
+    });
+    </script>
+</body>
+</html>

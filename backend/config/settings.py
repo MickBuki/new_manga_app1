@@ -44,6 +44,11 @@ class AppSettings:
     translator_default_method: str = "google"  # "google" или "openai"
     openai_api_key: str = ""  # Ключ API OpenAI
     
+    # Добавим новое поле для секретного ключа JWT
+    data_dir: str = os.path.join(project_root, "data")
+    jwt_secret_key: str = os.environ.get('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
+    jwt_token_expires: int = 24 * 60 * 60  # 24 часа в секундах
+
     # Настройки логирования
     log_settings: LogSettings = None
     
@@ -74,4 +79,9 @@ class AppSettings:
         self.translator_default_method = os.environ.get('TRANSLATOR_METHOD', self.translator_default_method)
         self.openai_api_key = os.environ.get('OPENAI_API_KEY', self.openai_api_key)
         
+        # Добавим новые параметры
+        self.data_dir = os.environ.get('DATA_DIR', self.data_dir)
+        self.jwt_secret_key = os.environ.get('JWT_SECRET_KEY', self.jwt_secret_key)
+        self.jwt_token_expires = int(os.environ.get('JWT_TOKEN_EXPIRES', self.jwt_token_expires))
+
         return self
