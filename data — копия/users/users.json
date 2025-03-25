@@ -1,0 +1,18 @@
+[
+  {
+    "id": "d466930f-b68f-415b-aed9-18f2c7bad808",
+    "username": "Mick",
+    "email": "mick.bukiman@gmail.com",
+    "password_hash": "ebc183cbe6743695b0237bb9576072c8101fa68d0e5276a3dc088ed4c30ba15f:4cf22e91cc511233b4910cbabe6d52be1f883e83c7a2a9b21eb4d9a2c793060f",
+    "created_at": "2025-03-25T18:29:41.785669",
+    "last_login": "2025-03-25T18:30:29.218095"
+  },
+  {
+    "id": "7c1c49b3-eec5-46a5-939a-4c1bb3b9c13b",
+    "username": "Misha",
+    "email": "1@mail.ru",
+    "password_hash": "7db70b674b511fdee3983e8ead37de82c383882dfdf1013d1aa715b91b468869:6e7f5f29a0eda77cdff8672f5e36bfa2f62fcc44663b37f58fadf9dbb0bd221b",
+    "created_at": "2025-03-25T18:31:12.547022",
+    "last_login": null
+  }
+]
