@@ -14,6 +14,7 @@ from PIL import Image as PILImage
 from backend.config import get_settings
 from backend.logger import get_app_logger
 from backend.models import get_bubble_model, get_text_model
+from backend.file_utils.temp import get_temp_filepath
 
 def process_segmentation(image_path, output_path=None):
     """
@@ -28,7 +29,8 @@ def process_segmentation(image_path, output_path=None):
         tuple: (результаты сегментации, маска пузырей, маска текстовых блоков)
     """
     if output_path is None:
-        output_path = 'segmentation_results.json'
+        output_filename = generate_unique_filename('segmentation_results', '.json')
+        output_path = get_temp_filepath(output_filename)
     
     settings = get_settings()
     logger = get_app_logger()

@@ -12,8 +12,9 @@ import shutil
 
 from backend.logger import get_app_logger
 from backend.config import get_settings
-from .temp import generate_unique_filename, save_text_blocks_info
+from .temp import generate_unique_filename, save_text_blocks_info, get_temp_filepath
 from .folders import natural_sort_key
+from backend.process_pipeline import process_segmentation, process_ocr_and_translation
 
 def process_single_file(file, translation_method, openai_api_key, ocr_engine, edit_mode=False, batch_id=None, file_index=0, source_language='zh', target_language='ru'):
     """
@@ -33,7 +34,7 @@ def process_single_file(file, translation_method, openai_api_key, ocr_engine, ed
     Returns:
         tuple: (путь к временному файлу, результаты обработки)
     """
-    from backend.process_pipeline import process_segmentation, process_ocr_and_translation
+    
     
     logger = get_app_logger()
     settings = get_settings()
@@ -42,13 +43,16 @@ def process_single_file(file, translation_method, openai_api_key, ocr_engine, ed
     original_filename = file.filename
     
     # Создаем уникальные имена для временных файлов
-    file_path = generate_unique_filename('temp_image', '.png')
+    temp_filename = generate_unique_filename('temp_image', '.png')
+    file_path = get_temp_filepath(temp_filename)
     file.save(file_path)
     
     # Уникальный идентификатор для временных файлов
     unique_id = generate_unique_filename('', '')
-    seg_results_path = f'segmentation_results_{unique_id}.json'
-    final_results_path = f'final_results_{unique_id}.json'
+    seg_results_filename = f'segmentation_results_{unique_id}.json'
+    final_results_filename = f'final_results_{unique_id}.json'
+    seg_results_path = get_temp_filepath(seg_results_filename)
+    final_results_path = get_temp_filepath(final_results_filename)
     
     logger.info(f"Обработка файла {original_filename}")
     
@@ -141,21 +145,23 @@ def process_single_image(image_path, translation_method, openai_api_key, ocr_eng
     Returns:
         tuple: (путь к временному файлу, результаты обработки)
     """
-    from backend.process_pipeline import process_segmentation, process_ocr_and_translation
     
     logger = get_app_logger()
     
     # Создаем уникальные имена для временных файлов
     unique_id = generate_unique_filename('', '')
-    file_path = generate_unique_filename('temp_image', '.png')
+    temp_filename = generate_unique_filename('temp_image', '.png')
+    file_path = get_temp_filepath(temp_filename)
     shutil.copy(image_path, file_path)
     
     # Получаем имя файла
     image_name = os.path.basename(image_path)
     
     # Обновленные пути для временных файлов
-    seg_results_path = f'segmentation_results_{unique_id}.json'
-    final_results_path = f'final_results_{unique_id}.json'
+    seg_results_filename = f'segmentation_results_{unique_id}.json'
+    final_results_filename = f'final_results_{unique_id}.json'
+    seg_results_path = get_temp_filepath(seg_results_filename)
+    final_results_path = get_temp_filepath(final_results_filename)
     
     logger.info(f"Обработка файла {image_name} из папки")
     

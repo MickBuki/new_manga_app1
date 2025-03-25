@@ -502,6 +502,10 @@ class MangaEditor:
         if not session_data:
             return False, "Сессия не найдена"
         
+        # Получаем настройки
+        from backend.config import get_settings
+        settings = get_settings()
+        
         # Получаем необходимые данные
         text_removed_path = session_data.get("text_removed_path")
         text_blocks = session_data.get("text_blocks", [])
@@ -516,8 +520,8 @@ class MangaEditor:
             # Генерируем имя файла из оригинального
             filename = f"edited_{original_filename}"
         
-        # Путь для сохранения в папке translated_books
-        save_path = os.path.join("translated_books", filename)
+        # Путь для сохранения в папке translated_books_dir из настроек
+        save_path = os.path.join(settings.translated_books_dir, filename)
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         
         try:

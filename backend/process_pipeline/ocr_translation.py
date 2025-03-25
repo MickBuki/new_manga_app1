@@ -15,6 +15,7 @@ from backend.models import extract_text_from_boxes, get_optimal_ocr_engine
 from backend.translation import translate_text_blocks
 from backend.image_processing import create_translated_image
 from backend.file_utils import save_text_blocks_info
+from backend.file_utils.temp import get_temp_filepath, generate_unique_filename
 from backend.manga_editor import MangaEditor
 
 def process_ocr_and_translation(image_path, seg_results, bubble_mask=None, text_background_mask=None, output_path=None, 
@@ -43,7 +44,8 @@ def process_ocr_and_translation(image_path, seg_results, bubble_mask=None, text_
         dict: Результаты обработки
     """
     if output_path is None:
-        output_path = 'final_results.json'
+        output_filename = generate_unique_filename('final_results', '.json')
+        output_path = get_temp_filepath(output_filename)
         
     settings = get_settings()
     logger = get_app_logger()
