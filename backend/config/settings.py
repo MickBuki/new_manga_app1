@@ -13,6 +13,9 @@ class LogSettings:
     max_size: int = 10 * 1024 * 1024  # 10 MB
     backup_count: int = 5
 
+# Получаем путь к корневой директории проекта
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 @dataclass
 class AppSettings:
     """Настройки приложения"""
@@ -22,12 +25,12 @@ class AppSettings:
     use_gpu: bool = False
     
     # Пути к ресурсам
-    books_dir: str = "data/books"
-    translated_books_dir: str = "data/translated_books"
-    static_dir: str = "frontend/static"
-    thumbnails_dir: str = "frontend/static/thumbnails"
-    temp_dir: str = "data/temp"
-    editor_sessions_dir: str = "data/editor_sessions"
+    books_dir: str = os.path.join(project_root, "data", "books")
+    translated_books_dir: str = os.path.join(project_root, "data", "translated_books")
+    static_dir: str = os.path.join(project_root, "frontend", "static")
+    thumbnails_dir: str = os.path.join(project_root, "frontend", "static", "thumbnails")
+    temp_dir: str = os.path.join(project_root, "data", "temp")
+    editor_sessions_dir: str = os.path.join(project_root, "data", "editor_sessions")
     
     # Пути к моделям
     bubble_model_path: str = "data/cut_thebuble/run1/weights/best.pt"

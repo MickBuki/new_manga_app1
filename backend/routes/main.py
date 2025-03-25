@@ -20,12 +20,6 @@ def index():
     results = None
     error = None
     
-    # Создаем папку для статических файлов и миниатюр, если они не существуют
-    if not os.path.exists('static'):
-        os.makedirs('static')
-    if not os.path.exists(os.path.join('static', 'thumbnails')):
-        os.makedirs(os.path.join('static', 'thumbnails'))
-    
     # Получаем список папок с мангой
     manga_folders = get_manga_folders()
     

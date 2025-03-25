@@ -3,7 +3,7 @@ from flask import redirect, url_for
 import os
 from PIL import Image
 
-@thumbnails_bp.route('/static/thumbnails/<folder>/<filename>')
+@thumbnails_bp.route('/frontend/static/thumbnails/<folder>/<filename>')
 def serve_thumbnail(folder, filename):
     """
     Обслуживание миниатюр изображений

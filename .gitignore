@@ -1,3 +1,7 @@
 '' 
 __pycache__/
 unified_env/
+data/editor_sessions/
+data/translated_books/
+translated_books/
+/manga_translator.log

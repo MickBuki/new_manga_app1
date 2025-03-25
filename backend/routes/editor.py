@@ -5,8 +5,8 @@ import time
 from backend.manga_editor import MangaEditor
 from backend.config import get_settings
 
-# Инициализация редактора манги
-manga_editor = MangaEditor()
+settings = get_settings()
+manga_editor = MangaEditor(settings.editor_sessions_dir)
 
 @editor_bp.route('/edit/<session_id>', methods=['GET'])
 def edit_manga(session_id):
@@ -70,7 +70,7 @@ def edit_manga(session_id):
         print(error_traceback)
         return f"Ошибка загрузки сессии: {str(e)}", 500
 
-@editor_bp.route('/frontend/static/editor_images/<session_id>/<filename>')
+@editor_bp.route('/static/editor_images/<session_id>/<filename>')
 def serve_editor_image(session_id, filename):
     """Обслуживание изображений редактора"""
     editor_dir = os.path.join(manga_editor.sessions_dir, session_id)
