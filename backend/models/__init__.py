@@ -8,12 +8,6 @@ from backend.config.models import (
 
 from backend.config import get_settings
 
-from .detection import (
-    get_device,
-    get_bubble_model,
-    get_text_model,
-    sort_text_bubbles
-)
 
 from .ocr import (
     get_mangaocr,
@@ -27,6 +21,13 @@ from .ocr import (
     ocr_with_easyocr,
     ocr_with_tesseract,
     get_tesseract_config
+)
+
+from .detection import (
+    get_device,
+    get_bubble_model,
+    get_text_model,
+    sort_text_bubbles
 )
 
 # Функция для извлечения текста из блоков

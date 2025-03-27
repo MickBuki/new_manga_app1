@@ -55,7 +55,7 @@ TESSERACT_LANG_CODES = {
 OPTIMAL_OCR_ENGINES = {
     'ja': 'mangaocr',    # Японский -> MangaOCR (специализированный для манги)
     'zh': 'paddleocr',   # Китайский -> PaddleOCR
-    'ko': 'paddleocr',   # Корейский -> EasyOCR
+    'ko': 'paddleocr',   # Корейский -> PaddleOCR
     'en': 'paddleocr',   # Английский -> tesseract
     'ru': 'easyocr',     # Русский -> EasyOCR
     'fr': 'tesseract',   # Французский -> Tesseract

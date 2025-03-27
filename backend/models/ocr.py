@@ -1,4 +1,5 @@
 import os
+from paddleocr import PaddleOCR
 import torch
 import cv2
 import numpy as np
@@ -6,7 +7,6 @@ import pytesseract
 import tempfile
 from PIL import Image
 from manga_ocr import MangaOcr
-from paddleocr import PaddleOCR
 import easyocr
 
 from .constants import (
@@ -189,7 +189,7 @@ def get_optimal_ocr_engine(source_language):
             print(f"Tesseract недоступен для языка {source_language}, используем запасной OCR")
             
             # Для английского и других европейских языков запасной вариант - EasyOCR
-            if source_language in ['en', 'fr', 'de', 'es', 'it', 'pt']:
+            if source_language in ['fr', 'de', 'es', 'it', 'pt']:
                 return 'easyocr'
             else:
                 return 'paddleocr'
@@ -228,36 +228,7 @@ def preprocess_image(image, language='zh', ocr_engine='paddleocr', block_id=None
         upscaled = cv2.resize(image, (width * 3, height * 3), interpolation=cv2.INTER_CUBIC)
         save_debug(upscaled, "upscaled")
         
-        # 1.2. Конвертируем в оттенки серого
-        if len(upscaled.shape) == 3:
-            gray = cv2.cvtColor(upscaled, cv2.COLOR_BGR2GRAY)
-        else:
-            gray = upscaled.copy()
-        save_debug(gray, "gray")
-        
-        # 1.3. Применяем легкий GaussianBlur
-        smoothed = cv2.GaussianBlur(gray, (3, 3), sigmaX=0.5, sigmaY=0.5)
-        save_debug(smoothed, "smoothed")
-        
-        # 1.4. Усиливаем контраст с CLAHE
-        clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8, 8))
-        enhanced = clahe.apply(smoothed)
-        save_debug(enhanced, "enhanced")
-
-        # 1.5. Проверяем распределение пикселей для определения фона
-        pixel_counts = np.bincount(enhanced.flatten(), minlength=256)
-        if pixel_counts[0] > pixel_counts[255]:  # Если больше темных пикселей
-            enhanced = cv2.bitwise_not(enhanced)
-            save_debug(enhanced, "inverted")
-
-        # 1.6. Применяем метод Оцу
-        _, otsu = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-        save_debug(otsu, "otsu")
-        
-        # 1.7. Инвертируем для черного текста на белом
-        final = cv2.bitwise_not(otsu)
-        save_debug(final, "final")
-        
+        final = upscaled
         return final
 
     # 2. Для корейского языка
@@ -267,74 +238,9 @@ def preprocess_image(image, language='zh', ocr_engine='paddleocr', block_id=None
         upscaled = cv2.resize(image, (width * 3, height * 3), interpolation=cv2.INTER_CUBIC)
         save_debug(upscaled, "upscaled")
         
-        # 2.2. Конвертируем в оттенки серого
-        if len(upscaled.shape) == 3:
-            gray = cv2.cvtColor(upscaled, cv2.COLOR_BGR2GRAY)
-        else:
-            gray = upscaled.copy()
-        save_debug(gray, "gray")
-        
-        # 2.3. Адаптивная бинаризация лучше работает для корейского
-        binary = cv2.adaptiveThreshold(
-            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 15, 5
-        )
-        save_debug(binary, "binary")
-        
-        # 2.4. Морфологические операции для корейского
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
-        morphed = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
-        save_debug(morphed, "morphed")
-        
-        # 2.5. Инвертируем для черного текста на белом
-        final = cv2.bitwise_not(morphed)
-        save_debug(final, "final")
-        
+        final = upscaled
         return final
-    
-    # 3. Для Tesseract (европейские языки)
-    if ocr_engine == 'tesseract' and language in ['en', 'fr', 'de', 'es', 'it', 'pt']:
-        # 3.1. Масштабирование
-        height, width = image.shape[:2]
-        upscaled = cv2.resize(image, (width * 3, height * 3), interpolation=cv2.INTER_CUBIC)
-        save_debug(upscaled, "upscaled")
-        
-        # 3.2. Конвертируем в оттенки серого
-        if len(upscaled.shape) == 3:
-            gray = cv2.cvtColor(upscaled, cv2.COLOR_BGR2GRAY)
-        else:
-            gray = upscaled.copy()
-        save_debug(gray, "gray")
-        
-        # 3.3. Билатеральный фильтр лучше для текста на латинице
-        filtered = cv2.bilateralFilter(gray, 9, 75, 75)
-        save_debug(filtered, "filtered")
-        
-        # 3.4. Повышаем контраст
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        enhanced = clahe.apply(filtered)
-        save_debug(enhanced, "enhanced")
-        
-        # 3.5. Адаптивная бинаризация для латиницы
-        binary = cv2.adaptiveThreshold(
-            enhanced, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-            cv2.THRESH_BINARY, 11, 7
-        )
-        save_debug(binary, "binary")
-        
-        # 3.6. Морфологические операции
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
-        dilated = cv2.dilate(binary, kernel, iterations=1)
-        save_debug(dilated, "dilated")
-        
-        # Для Tesseract нам нужен черный текст на белом
-        if np.mean(dilated) > 127:  # Если средняя яркость высокая (больше белого)
-            final = cv2.bitwise_not(dilated)
-            save_debug(final, "final_inverted")
-        else:
-            final = dilated
-            save_debug(final, "final")
-        
-        return final
+
     
     # 4. Для японского языка
     if language == 'ja':
@@ -371,36 +277,7 @@ def preprocess_image(image, language='zh', ocr_engine='paddleocr', block_id=None
     upscaled = cv2.resize(image, (width * 3, height * 3), interpolation=cv2.INTER_CUBIC)
     save_debug(upscaled, "upscaled")
     
-    # 5.2. Конвертируем в оттенки серого
-    if len(upscaled.shape) == 3:
-        gray = cv2.cvtColor(upscaled, cv2.COLOR_BGR2GRAY)
-    else:
-        gray = upscaled.copy()
-    save_debug(gray, "gray")
-    
-    # 5.3. Уменьшаем шум
-    smoothed = cv2.GaussianBlur(gray, (3, 3), sigmaX=0.5, sigmaY=0.5)
-    save_debug(smoothed, "smoothed")
-    
-    # 5.4. Улучшаем контраст
-    clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8, 8))
-    enhanced = clahe.apply(smoothed)
-    save_debug(enhanced, "enhanced")
-    
-    # 5.5. Проверка инверсии
-    pixel_counts = np.bincount(enhanced.flatten(), minlength=256)
-    if pixel_counts[0] > pixel_counts[255]:
-        enhanced = cv2.bitwise_not(enhanced)
-        save_debug(enhanced, "inverted")
-    
-    # 5.6. Бинаризация
-    _, binary = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-    save_debug(binary, "binary")
-    
-    # 5.7. Инвертируем для черного текста на белом
-    final = cv2.bitwise_not(binary)
-    save_debug(final, "final")
-    
+    final = upscaled
     return final
 
 def get_tesseract_config(lang):
